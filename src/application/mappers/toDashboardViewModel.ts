@@ -1,110 +1,149 @@
 import type { DashboardData } from "../../domain/use-cases/GetDashboardData";
+import { formatCurrency, formatShortDate } from "../utils/formatters";
 import type {
   CashFlowCategoryViewModel,
   DashboardViewModel,
 } from "../dto/DashboardViewModel";
 
-const currencyFormatter = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-});
+const categoryColors = [
+  "#B91C1C",
+  "#DC2626",
+  "#EF4444",
+  "#F87171",
+  "#7F1D1D",
+  "#991B1B",
+  "#64748B",
+  "#111827",
+];
 
-const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
-  day: "2-digit",
-  month: "short",
-});
-
-const categoryColors = ["#2E7D32", "#F9A825", "#1565C0", "#C62828", "#00897B"];
+const healthLabels: Record<DashboardData["summary"]["financialHealthStatus"], string> = {
+  excellent: "Saude financeira excelente",
+  healthy: "Saude financeira em equilibrio",
+  attention: "Saude financeira pede atencao",
+  critical: "Saude financeira critica",
+};
 
 export function toDashboardViewModel(data: DashboardData): DashboardViewModel {
   const expenseTransactions = data.transactions.filter(
     (transaction) => transaction.type === "expense",
   );
 
-  const totalExpenses = data.summary.totalExpenses || 1;
+  const categoryEntries = Object.entries(data.summary.expenseCategoryTotals).sort(
+    (a, b) => b[1] - a[1],
+  );
+  const categoryShares = distributePercentages(
+    categoryEntries.map(([, amount]) => amount),
+    data.summary.totalExpenses,
+  );
 
-  const cashFlowCategories = Object.entries(
-    expenseTransactions.reduce<Record<string, number>>((accumulator, transaction) => {
-      accumulator[transaction.category] =
-        (accumulator[transaction.category] ?? 0) + transaction.amount;
-      return accumulator;
-    }, {}),
-  )
-    .sort((a, b) => b[1] - a[1])
-    .map<CashFlowCategoryViewModel>(([category, amount], index) => ({
+  const cashFlowCategories = categoryEntries.map<CashFlowCategoryViewModel>(
+    ([category, amount], index) => ({
+      id: category,
       category,
-      amount: currencyFormatter.format(amount),
+      amount: formatCurrency(amount),
       rawAmount: amount,
-      share: Math.round((amount / totalExpenses) * 100),
+      share: categoryShares[index] ?? 0,
       color: categoryColors[index % categoryColors.length],
-    }));
+    }),
+  );
 
   const summaryCards = [
     {
-      label: "Receita mensal",
-      value: currencyFormatter.format(data.summary.totalIncome),
-      helper: "Entradas recorrentes registradas neste mes",
+      id: "income",
+      label: "Receita no período",
+      value: formatCurrency(data.summary.totalIncome),
+      helper: `Entradas registradas no periodo ${data.periodDescription.toLowerCase()}`,
       tone: "green" as const,
     },
     {
+      id: "expenses",
       label: "Despesas totais",
-      value: currencyFormatter.format(data.summary.totalExpenses),
-      helper: `Maior foco de gasto: ${data.summary.largestExpenseCategory}`,
+      value: formatCurrency(data.summary.totalExpenses),
+      helper: `Maior foco no recorte: ${data.summary.largestExpenseCategory}`,
       tone: "red" as const,
     },
     {
+      id: "balance",
       label: "Saldo projetado",
-      value: currencyFormatter.format(data.summary.balance),
-      helper: "Valor disponivel apos os compromissos do periodo",
+      value: formatCurrency(data.summary.balance),
+      helper: "Valor disponivel apos os compromissos do recorte",
       tone: "blue" as const,
     },
     {
+      id: "savings-rate",
       label: "Taxa de poupança",
       value: `${data.summary.savingsRate.toFixed(0)}%`,
-      helper: "Percentual da renda que esta sobrando no mes",
+      helper: healthLabels[data.summary.financialHealthStatus],
       tone: "yellow" as const,
     },
   ];
 
   const goals = data.goals.map((goal) => ({
+    id: goal.id,
     title: goal.title,
     progress: Math.min(
       100,
-      Math.round((goal.currentAmount / goal.targetAmount) * 100),
+      goal.targetAmount <= 0
+        ? 0
+        : Math.round((goal.currentAmount / goal.targetAmount) * 100),
     ),
-    currentAmount: currencyFormatter.format(goal.currentAmount),
-    targetAmount: currencyFormatter.format(goal.targetAmount),
-    dueDate: dateFormatter.format(new Date(goal.dueDate)),
+    currentAmount: formatCurrency(goal.currentAmount),
+    targetAmount: formatCurrency(goal.targetAmount),
+    dueDate: formatShortDate(goal.dueDate),
+    status: getGoalStatus(goal.currentAmount, goal.targetAmount),
+    monthlyPace: formatCurrency(
+      Math.max(goal.targetAmount - goal.currentAmount, 0) / 6,
+    ),
   }));
 
   const educationCards = data.contents.map((content) => ({
+    id: content.id,
     title: content.title,
     category: content.category,
     readingTime: content.readingTime,
     takeaway: content.takeaway,
+    intro: content.intro,
+    sections: content.sections,
+    checklist: content.checklist,
+    nextStep: content.nextStep,
+  }));
+
+  const tutorialCards = data.tutorials.map((tutorial) => ({
+    id: tutorial.id,
+    title: tutorial.title,
+    category: tutorial.category,
+    readingTime: tutorial.readingTime,
+    takeaway: tutorial.takeaway,
+    intro: tutorial.intro,
+    sections: tutorial.sections,
+    checklist: tutorial.checklist,
+    nextStep: tutorial.nextStep,
   }));
 
   const incomeExpenseRatio =
     data.summary.totalExpenses === 0
-      ? 0
+      ? null
       : data.summary.totalIncome / data.summary.totalExpenses;
 
   const monthlyFreeCash = Math.max(data.summary.balance, 0);
 
   const insights = [
     {
+      id: "income-expense-ratio",
       title: "Relacao ganho x gasto",
-      value: `${incomeExpenseRatio.toFixed(2)}x`,
+      value: incomeExpenseRatio === null ? "Sem saídas" : `${incomeExpenseRatio.toFixed(2)}x`,
       description: "Quanto sua renda cobre suas despesas mensais atuais.",
       tone: "blue" as const,
     },
     {
+      id: "monthly-free-cash",
       title: "Potencial de aporte",
-      value: currencyFormatter.format(monthlyFreeCash),
+      value: formatCurrency(monthlyFreeCash),
       description: "Valor que pode ser distribuido entre reserva e objetivos.",
       tone: "green" as const,
     },
     {
+      id: "attention-category",
       title: "Sinal de alerta",
       value: data.summary.largestExpenseCategory,
       description: "Categoria que mais merece revisao neste momento.",
@@ -113,13 +152,15 @@ export function toDashboardViewModel(data: DashboardData): DashboardViewModel {
   ];
 
   const topExpenses = expenseTransactions
+    .slice()
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 4)
     .map((transaction) => ({
+      id: transaction.id,
       title: transaction.description,
       category: transaction.category,
-      amount: currencyFormatter.format(transaction.amount),
-      date: dateFormatter.format(new Date(transaction.date)),
+      amount: formatCurrency(transaction.amount),
+      date: formatShortDate(transaction.date),
     }));
 
   const chatbotMessages = [
@@ -144,7 +185,76 @@ export function toDashboardViewModel(data: DashboardData): DashboardViewModel {
     insights,
     topExpenses,
     educationCards,
+    tutorialCards,
     chatbotMessages,
-    attentionMessage: `Sua principal oportunidade está em revisar a categoria ${data.summary.largestExpenseCategory.toLowerCase()} e redirecionar parte desse valor para metas prioritárias.`,
+    attentionMessage: buildAttentionMessage(data.summary.largestExpenseCategory),
+    financialHealthLabel: healthLabels[data.summary.financialHealthStatus],
+    emptyStateMessage:
+      data.transactions.length === 0
+        ? "Nenhum lançamento encontrado para os filtros e período selecionados."
+        : null,
+    query: data.query,
+    filterOptions: data.filterOptions,
+    periodLabel: data.periodLabel,
+    periodDescription: data.periodDescription,
+    activeFiltersDescription: buildActiveFiltersDescription(data),
   };
+}
+
+function buildAttentionMessage(largestExpenseCategory: string): string {
+  if (largestExpenseCategory === "Sem dados") {
+    return "Selecione um período ou filtro com saídas registradas para gerar uma leitura de atenção mais precisa.";
+  }
+
+  return `Sua principal oportunidade está em revisar a categoria ${largestExpenseCategory.toLowerCase()} e redirecionar parte desse valor para metas prioritárias.`;
+}
+
+function buildActiveFiltersDescription(data: DashboardData): string {
+  const category = findOptionLabel(data.filterOptions.categories, data.query.category);
+  const goal = findOptionLabel(data.filterOptions.goals, data.query.goalId);
+  const flow = findOptionLabel(data.filterOptions.flows, data.query.flow);
+
+  return `${data.periodDescription} • ${category} • ${goal} • ${flow}`;
+}
+
+function findOptionLabel(
+  options: Array<{ value: string; label: string }>,
+  value: string,
+): string {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
+
+function distributePercentages(amounts: number[], total: number): number[] {
+  if (total <= 0 || amounts.length === 0) {
+    return amounts.map(() => 0);
+  }
+
+  const exactShares = amounts.map((amount) => (amount / total) * 100);
+  const roundedDown = exactShares.map(Math.floor);
+  const remaining = 100 - roundedDown.reduce((sum, share) => sum + share, 0);
+
+  return roundedDown.map((share, index) => {
+    const decimalRank = exactShares
+      .map((exactShare, rankIndex) => ({
+        rankIndex,
+        decimal: exactShare - Math.floor(exactShare),
+      }))
+      .sort((a, b) => b.decimal - a.decimal)
+      .slice(0, remaining)
+      .some((entry) => entry.rankIndex === index);
+
+    return decimalRank ? share + 1 : share;
+  });
+}
+
+function getGoalStatus(
+  currentAmount: number,
+  targetAmount: number,
+): DashboardViewModel["goals"][number]["status"] {
+  if (targetAmount <= 0 || currentAmount >= targetAmount) {
+    return "completed";
+  }
+
+  const progress = currentAmount / targetAmount;
+  return progress >= 0.35 ? "on-track" : "attention";
 }
