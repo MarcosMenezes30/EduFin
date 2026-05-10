@@ -1,4 +1,4 @@
-export interface EducationContent {
+export interface TutorialContent {
   id: string;
   title: string;
   category: string;

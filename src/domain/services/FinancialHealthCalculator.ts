@@ -3,18 +3,22 @@ import type { Transaction } from "../entities/Transaction";
 
 export class FinancialHealthCalculator {
   calculateSummary(transactions: Transaction[]): FinancialSummary {
-    const totalIncome = transactions
+    const validTransactions = transactions.filter(
+      (transaction) => Number.isFinite(transaction.amount) && transaction.amount >= 0,
+    );
+
+    const totalIncome = validTransactions
       .filter((transaction) => transaction.type === "income")
       .reduce((accumulator, transaction) => accumulator + transaction.amount, 0);
 
-    const totalExpenses = transactions
+    const totalExpenses = validTransactions
       .filter((transaction) => transaction.type === "expense")
       .reduce((accumulator, transaction) => accumulator + transaction.amount, 0);
 
     const balance = totalIncome - totalExpenses;
     const savingsRate = totalIncome === 0 ? 0 : (balance / totalIncome) * 100;
 
-    const expenseCategoryMap = transactions
+    const expenseCategoryTotals = validTransactions
       .filter((transaction) => transaction.type === "expense")
       .reduce<Record<string, number>>((accumulator, transaction) => {
         accumulator[transaction.category] =
@@ -23,8 +27,10 @@ export class FinancialHealthCalculator {
       }, {});
 
     const largestExpenseCategory =
-      Object.entries(expenseCategoryMap).sort((a, b) => b[1] - a[1])[0]?.[0] ??
+      Object.entries(expenseCategoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0] ??
       "Sem dados";
+
+    const financialHealthStatus = this.classifyFinancialHealth(savingsRate, balance);
 
     return {
       totalIncome,
@@ -32,6 +38,27 @@ export class FinancialHealthCalculator {
       balance,
       savingsRate,
       largestExpenseCategory,
+      expenseCategoryTotals,
+      financialHealthStatus,
     };
+  }
+
+  private classifyFinancialHealth(
+    savingsRate: number,
+    balance: number,
+  ): FinancialSummary["financialHealthStatus"] {
+    if (balance < 0) {
+      return "critical";
+    }
+
+    if (savingsRate >= 30) {
+      return "excellent";
+    }
+
+    if (savingsRate >= 15) {
+      return "healthy";
+    }
+
+    return "attention";
   }
 }
