@@ -17,13 +17,17 @@ O protótipo não é apenas um painel de gastos. É a combinação entre **anál
 | Funcionalidade | Descrição |
 |---|---|
 | 📊 Dashboard financeiro | Receita, despesas, saldo projetado e taxa de poupança em um painel único |
+| 🗓️ Períodos dinâmicos | Visualizações diária, semanal, mensal, trimestral, semestral e anual |
+| 🧮 Filtros funcionais | Recortes por objetivo, categoria e tipo de lançamento |
 | 🔍 Leitura de atenção | Identificação da principal oportunidade de melhoria financeira |
 | 🍕 Distribuição por categoria | Gráfico visual dos gastos por tipo |
 | 🧾 Custos recentes | Lista dos principais lançamentos para leitura rápida |
 | 🎯 Metas com progresso | Acompanhamento visual de objetivos como reserva de emergência, viagem e equipamentos |
 | 📈 Indicadores ganho × gasto | Relação entre receita e despesa e potencial de aporte |
-| 📚 Educação contextualizada | Cards com recomendações de conteúdo conectadas à situação financeira do usuário |
-| 🤖 Mock de chatbot com IA | Demonstração visual da futura camada de assistência com LLM |
+| 📚 Educação contextualizada | Cards clicáveis com aulas completas conectadas à situação financeira do usuário |
+| 🤖 Simulação de chatbot com IA | Chat local interativo que demonstra a futura camada de assistência com LLM |
+| 🧭 Navegação lateral | Experiência administrativa com páginas separadas para dashboard, despesas, metas, insights, educação e assistente |
+| 🧑‍🏫 Tutoriais da plataforma | Guias em texto com página própria para aprender a usar melhor a EduFin |
 
 ---
 
@@ -62,6 +66,9 @@ A base foi estruturada em camadas desde o início para facilitar manutenção, t
 - **React + TypeScript** — interface e tipagem do projeto
 - **Vite** — desenvolvimento rápido e build enxuto
 - **CSS responsivo** — suporte a desktop e mobile
+- **PWA básico** — manifesto, ícone, metadados mobile e service worker para instalação/cache
+- **Vitest + Testing Library** — testes de regra de negócio, mapeamento e interação
+- **ESLint** — verificação estática de qualidade
 
 ### Arquitetura em camadas
 
@@ -70,10 +77,28 @@ src/
 ├── domain/          # Entidades, contratos de repositório e casos de uso
 ├── application/     # Mapeamento entre domínio e interface
 ├── infrastructure/  # Implementações concretas (repositório em memória com dados simulados)
-└── presentation/    # Hooks e componentes de UI
+└── presentation/    # Hooks, estados e componentes de UI
 ```
 
 Essa organização permite substituir a fonte de dados simulada por uma API real sem reescrever a lógica principal da aplicação.
+
+### Qualidade implementada no MVP
+
+- Componentes de interface separados por responsabilidade
+- Layout administrativo com navegação lateral e identidade visual branca/vermelha
+- Navegação mobile em formato de web app, com barra inferior e suporte a safe areas
+- Manifesto, ícone e service worker registrados em produção
+- Dashboard recalculado por período, categoria, objetivo e tipo de lançamento
+- Cálculo financeiro isolado em serviço de domínio
+- Mapeamento dedicado para view models de tela
+- Tratamento de loading, erro e estado vazio
+- Simulação funcional do chat com perguntas livres e sugestões rápidas
+- Página de leitura para cada conteúdo educativo recomendado
+- Seção de tutoriais com guias próprios sobre uso da plataforma, integração bancária, metas e despesas
+- Percentuais de categorias ajustados para totalizar 100%
+- Formatação de datas com fuso controlado
+- Testes automatizados para cálculo, mapeamento e interação principal
+- Scripts de lint, testes, typecheck e build
 
 ---
 
@@ -82,6 +107,17 @@ Essa organização permite substituir a fonte de dados simulada por uma API real
 ```bash
 npm install
 npm run dev
+```
+
+## Scripts disponíveis
+
+```bash
+npm run dev        # servidor de desenvolvimento
+npm run build      # typecheck + build de produção
+npm run preview    # preview do build
+npm run typecheck  # checagem TypeScript
+npm run lint       # verificação estática
+npm run test       # testes automatizados
 ```
 
 ---
@@ -121,3 +157,5 @@ Criptografia, controle de acesso, trilhas de auditoria e política clara de gove
 3. Importação manual ou automática de transações
 4. Trilhas educativas personalizadas por perfil
 5. Motor de insights com IA e explicações contextualizadas
+6. Integração real do assistente com LLM usando dados anonimizados
+7. Testes end-to-end e monitoramento de qualidade visual
